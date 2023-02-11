@@ -32,40 +32,43 @@ class Program
                 {
                     TelegramUserId = chatId
                 };
-                
+
                 _dbContext.AddUser(user);
 
-                await client.SendTextMessageAsync(chatId: chatId, DialogWindow.PasswordStep(), cancellationToken: cancellationToken);
+                await client.SendTextMessageAsync(chatId: chatId, DialogWindow.PasswordStep(),
+                    cancellationToken: cancellationToken);
             }
 
-            if (update.Message.Text != null)
+            if (update.Message.Text != null && _dbContext.GetUser(update.Message.Chat.Id).IsAuthorized == null && update.Message!.Text != "/start")
             {
-                while (_dbContext.GetUser(update.Message.Chat.Id).IsAuthorized == null)
-                {
-                    var usersMessageText = update.Message.Text;
-                
-                    var user = _dbContext.GetUser(update.Message.Chat.Id);
+                var usersMessageText = update.Message.Text;
 
-                    if (user.Attempts <3 && user.IsAuthorized == null)
+                var user = _dbContext.GetUser(update.Message.Chat.Id);
+
+                if (user.IsAuthorized == null)
+                {
+                    auth.CheckPassword(user, usersMessageText, _dbContext);
+                    if (user.IsAuthorized == null)
                     {
-                        auth.CheckPassword(user, usersMessageText, _dbContext);
+                        await client.SendTextMessageAsync(chatId: update.Message.Chat.Id,
+                            DialogWindow.WrongPasswordStep(user.Attempts),
+                            cancellationToken: cancellationToken);
                     }
-                    
-                    
-                }
-
-                if (_dbContext.GetUser(update.Message.Chat.Id).IsAuthorized == false)
-                {
-                    Console.WriteLine("Авторизация провалена");
-                }
-
-                if (_dbContext.GetUser(update.Message.Chat.Id).IsAuthorized == true)
-                {
-                    Console.WriteLine("Авторизация успешна");
-                    //Запуск основной программы
                 }
             }
             
+            if (_dbContext.GetUser(update.Message.Chat.Id).IsAuthorized == true)
+            {
+                await client.SendTextMessageAsync(chatId: update.Message.Chat.Id, "Авторизация успешна",
+                    cancellationToken: cancellationToken);
+            }
+
+            if (_dbContext.GetUser(update.Message.Chat.Id).IsAuthorized == false)
+            {
+                await client.SendTextMessageAsync(chatId: update.Message.Chat.Id, "Пользователь заблокирован",
+                    cancellationToken: cancellationToken);
+            }
+
         }
 
         async Task HandlePollingErrorAsync(ITelegramBotClient arg1, Exception arg2, CancellationToken arg3)
@@ -75,5 +78,4 @@ class Program
 
         Console.ReadLine();
     }
-    
 }
